@@ -341,8 +341,14 @@ extension SwiftLanguageServer {
 
         let filterName: String? = value[self.keys.name]
         let insertText: String? = value[self.keys.sourcetext]
+        let numBytesToErase: Int? = value[self.keys.num_bytes_to_erase]
 
         let kind: sourcekitd_uid_t? = value[self.keys.kind]
+
+        var eraseEdit: TextEdit? = nil
+        if let numBytesToErase = numBytesToErase, numBytesToErase > 0 {
+          eraseEdit = self.eraseEdit(numBytesToErase: numBytesToErase, from: completionPos, in: snapshot)
+        }
 
         result.items.append(CompletionItem(
           label: name,
@@ -352,6 +358,7 @@ extension SwiftLanguageServer {
           textEdit: nil,
           insertText: insertText.map { self.rewriteCompletionPlacholders($0) },
           insertTextFormat: .snippet,
+          additionalTextEdits: eraseEdit.map { [$0] },
           kind: kind?.asCompletionItemKind(self.values) ?? .value,
           deprecated: nil
         ))
@@ -385,6 +392,21 @@ extension SwiftLanguageServer {
       index += 1
     }
     return result
+  }
+
+  func eraseEdit(numBytesToErase: Int, from pos: Position, in snapshot: DocumentSnapshot) -> TextEdit? {
+    guard let utf8Offset = snapshot.lineTable.utf8OffsetOf(line: pos.line, utf16Column: pos.utf16index) else {
+      return nil
+    }
+    if utf8Offset < numBytesToErase {
+      return nil
+    }
+    guard let lineColumn = snapshot.lineTable.lineAndUTF16ColumnOf(utf8Offset: utf8Offset - numBytesToErase) else {
+      return nil
+    }
+    let startPos = Position(line: lineColumn.line, utf16index: lineColumn.utf16Column)
+
+    return TextEdit(range: startPos..<pos, newText: "")
   }
 
   func adjustCompletionLocation(_ pos: Position, in snapshot: DocumentSnapshot) -> Position {

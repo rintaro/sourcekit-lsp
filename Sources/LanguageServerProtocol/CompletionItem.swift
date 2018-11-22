@@ -38,13 +38,16 @@ public struct CompletionItem: Codable, Hashable {
   /// The format of the `textEdit.nextText` or `insertText` value.
   public var insertTextFormat: InsertTextFormat?
 
+  /// Optional array of additional text edits that are applied when selecting this completion.
+  public var additionalTextEdits: [TextEdit]?
+
   public var kind: CompletionItemKind
 
   public var deprecated: Bool?
 
   // TODO: remaining members
 
-  public init(label: String, detail: String? = nil, sortText: String? = nil, filterText: String? = nil, textEdit: TextEdit? = nil, insertText: String? = nil, insertTextFormat: InsertTextFormat? = nil, kind: CompletionItemKind, deprecated: Bool? = nil) {
+  public init(label: String, detail: String? = nil, sortText: String? = nil, filterText: String? = nil, textEdit: TextEdit? = nil, insertText: String? = nil, insertTextFormat: InsertTextFormat? = nil, additionalTextEdits: [TextEdit]? = nil, kind: CompletionItemKind, deprecated: Bool? = nil) {
     self.label = label
     self.detail = detail
     self.sortText = sortText
@@ -52,6 +55,7 @@ public struct CompletionItem: Codable, Hashable {
     self.textEdit = textEdit
     self.insertText = insertText
     self.insertTextFormat = insertTextFormat
+    self.additionalTextEdits = additionalTextEdits
     self.kind = kind
     self.deprecated = deprecated
   }

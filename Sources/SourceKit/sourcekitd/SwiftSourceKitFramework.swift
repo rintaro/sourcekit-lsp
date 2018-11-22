@@ -208,6 +208,7 @@ struct sourcekitd_keys {
   let usr: sourcekitd_uid_t
   let annotated_decl: sourcekitd_uid_t
   let doc_full_as_xml: sourcekitd_uid_t
+  let num_bytes_to_erase: sourcekitd_uid_t
 
   init(api: sourcekitd_functions_t) {
     request = api.uid_get_from_cstr("key.request")!
@@ -230,6 +231,7 @@ struct sourcekitd_keys {
     usr = api.uid_get_from_cstr("key.usr")!
     annotated_decl = api.uid_get_from_cstr("key.annotated_decl")!
     doc_full_as_xml = api.uid_get_from_cstr("key.doc.full_as_xml")!
+    num_bytes_to_erase = api.uid_get_from_cstr("key.num_bytes_to_erase")!
   }
 }
 
