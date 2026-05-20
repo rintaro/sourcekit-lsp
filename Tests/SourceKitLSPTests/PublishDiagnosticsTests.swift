@@ -171,6 +171,7 @@ final class PublishDiagnosticsTests: SourceKitLSPTestCase {
       manifest: """
         let package = Package(
           name: "MyLibrary",
+          platforms: [.macOS(.v13)],
           targets: [
             .target(name: "LibA"),
             .target(name: "LibB", dependencies: ["LibA"]),
