@@ -236,7 +236,14 @@ package actor SourceKitLSPServer {
       }
 
       let uri = DocumentURI(url)
-      let options = SourceKitLSPOptions.merging(base: self.options, workspaceFolder: uri)
+      let trusted = isWorkspaceTrusted(workspaceFolder: uri)
+      if !trusted {
+        requestWorkspaceTrust(workspaceFolder: uri)
+      }
+      let options =
+        trusted
+        ? SourceKitLSPOptions.merging(base: self.options, workspaceFolder: uri)
+        : self.options
 
       // Some build servers consider paths outside of the folder (eg. BSP has settings in the home directory). If we
       // allowed those paths, then the very first folder that the file is in would always be its own build server - so
@@ -246,6 +253,7 @@ package actor SourceKitLSPServer {
           forWorkspaceFolder: uri,
           onlyConsiderRoot: true,
           options: options,
+          considerWorkspaceConfig: trusted,
           hooks: hooks.buildServerHooks
         )
       else {
@@ -810,14 +818,79 @@ extension SourceKitLSPServer {
     return workspace
   }
 
+  /// Returns whether the workspace folder should be operated in trusted mode (loading
+  /// `.sourcekit-lsp/config.json`, considering `.bsp/*.json`).
+  ///
+  /// Pure check — does not prompt. To prompt the user when a workspace returns `false`,
+  /// callers should pair this with `requestWorkspaceTrust(workspaceFolder:)`.
+  private func isWorkspaceTrusted(workspaceFolder: DocumentURI) -> Bool {
+    guard let url = workspaceFolder.fileURL else { return true }
+    let trust = WorkspaceTrust()
+    if !trust.hasWorkspaceScopedConfig(workspaceRoot: url) { return true }
+    return trust.isTrusted(workspaceRoot: url)
+  }
+
+  /// Fires off a background task that asks the user whether to trust `workspaceFolder` and,
+  /// on grant, reloads the workspace in trusted mode and reattaches open documents.
+  ///
+  /// Returns immediately; does not wait for the user's response.
+  private func requestWorkspaceTrust(workspaceFolder: DocumentURI) {
+    guard let url = workspaceFolder.fileURL else { return }
+    Task { [weak self] in
+      guard let self else { return }
+      let trust = WorkspaceTrust()
+      guard await trust.requestTrust(workspaceRoot: url, connection: self.client) else { return }
+      await self.reloadWorkspace(workspaceFolder: workspaceFolder)
+    }
+  }
+
+  /// Replaces the workspace for the given folder URI with a freshly-created one (e.g., after
+  /// the user grants trust). Open documents are reattached to the new workspace.
+  private func reloadWorkspace(workspaceFolder: DocumentURI) async {
+    var oldWorkspace: Workspace?
+    await workspaceQueue.async {
+      guard
+        let index = self.workspacesAndIsImplicit.firstIndex(where: {
+          $0.workspace.rootUri == workspaceFolder
+        })
+      else {
+        return
+      }
+      let entry = self.workspacesAndIsImplicit.remove(at: index)
+      oldWorkspace = entry.workspace
+      let newWorkspace = await orLog("Reloading workspace after trust grant") {
+        try await self.createWorkspaceWithInferredBuildServer(workspaceFolder: workspaceFolder)
+      }
+      if let newWorkspace {
+        self.workspacesAndIsImplicit.insert(
+          (workspace: newWorkspace, isImplicit: entry.isImplicit),
+          at: index
+        )
+      }
+    }.value
+
+    self.scheduleUpdateOfUriToWorkspace()
+    if let oldWorkspace {
+      Task { await oldWorkspace.shutdown() }
+    }
+  }
+
   /// Determines the build server for the given workspace folder and creates a `Workspace` that uses this inferred build
   /// system.
   private func createWorkspaceWithInferredBuildServer(workspaceFolder: DocumentURI) async throws -> Workspace {
-    let options = SourceKitLSPOptions.merging(base: self.options, workspaceFolder: workspaceFolder)
+    let trusted = isWorkspaceTrusted(workspaceFolder: workspaceFolder)
+    if !trusted {
+      requestWorkspaceTrust(workspaceFolder: workspaceFolder)
+    }
+    let options =
+      trusted
+      ? SourceKitLSPOptions.merging(base: self.options, workspaceFolder: workspaceFolder)
+      : self.options
     let buildServerSpec = determineBuildServer(
       forWorkspaceFolder: workspaceFolder,
       onlyConsiderRoot: false,
       options: options,
+      considerWorkspaceConfig: trusted,
       hooks: hooks.buildServerHooks
     )
     return try await self.createWorkspace(

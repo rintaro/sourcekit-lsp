@@ -62,11 +62,15 @@ private func searchForCompilationDatabaseConfig(
 /// servers's project root is (see `BuiltInBuildServer.projectRoot(for:options:)`). `onlyConsiderRoot` controls whether
 /// paths outside the root should be considered (eg. configuration files in the user's home directory).
 ///
+/// `considerWorkspaceConfig` controls whether `.bsp/*.json` files inside the workspace folder are honored. Callers
+/// should pass `false` when the workspace has not been trusted by the user.
+///
 /// Returns `nil` if no build server can handle this workspace folder.
 package func determineBuildServer(
   forWorkspaceFolder workspaceFolder: DocumentURI,
   onlyConsiderRoot: Bool,
   options: SourceKitLSPOptions,
+  considerWorkspaceConfig: Bool = true,
   hooks: BuildServerHooks
 ) -> BuildServerSpec? {
   if let injectBuildServer = hooks.injectBuildServer {
@@ -94,6 +98,7 @@ package func determineBuildServer(
     case .buildServer:
       spec = ExternalBuildServerAdapter.searchForConfig(
         in: workspaceFolderUrl,
+        considerWorkspaceConfig: considerWorkspaceConfig,
         onlyConsiderRoot: onlyConsiderRoot,
         options: options
       )

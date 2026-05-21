@@ -243,10 +243,16 @@ actor ExternalBuildServerAdapter {
 
   static package func searchForConfig(
     in workspaceFolder: URL,
+    considerWorkspaceConfig: Bool,
     onlyConsiderRoot: Bool,
     options: SourceKitLSPOptions
   ) -> BuildServerSpec? {
-    guard let configPath = getConfigPath(for: workspaceFolder, onlyConsiderRoot: onlyConsiderRoot) else {
+    guard
+      let configPath = getConfigPath(
+        for: considerWorkspaceConfig ? workspaceFolder : nil,
+        onlyConsiderRoot: onlyConsiderRoot
+      )
+    else {
       return nil
     }
 
