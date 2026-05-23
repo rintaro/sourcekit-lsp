@@ -1311,9 +1311,9 @@ package actor BuildServerManager: QueueBasedMessageHandler {
       let settings: FileBuildSettings? = await orLog("Getting build settings") { () -> FileBuildSettings? in
         let target: WithTimeoutResult<BuildTargetIdentifier?> =
           if let explicitlyRequestedTarget {
-            .result(explicitlyRequestedTarget)
+            .result(.success(explicitlyRequestedTarget))
           } else {
-            try await withTimeoutResult(options.buildSettingsTimeoutOrDefault) {
+            await withTimeoutResult(options.buildSettingsTimeoutOrDefault) {
               return await self.canonicalTarget(for: mainFile)
             } resultReceivedAfterTimeout: { _ in
               await self.filesBuildSettingsChangedDebouncer.scheduleCall([document])
@@ -1322,7 +1322,7 @@ package actor BuildServerManager: QueueBasedMessageHandler {
         var languageForFile: Language
         if let language {
           languageForFile = language
-        } else if case let .result(target?) = target,
+        } else if case let .result(.success(target?)) = target,
           let language = await self.defaultLanguage(for: mainFile, in: target)
         {
           languageForFile = language
@@ -1334,14 +1334,16 @@ package actor BuildServerManager: QueueBasedMessageHandler {
           return nil
         }
         switch target {
-        case .result(let target?):
+        case .result(.success(let target?)):
           return await self.buildSettings(
             for: mainFile,
             in: target,
             language: languageForFile,
             fallbackAfterTimeout: fallbackAfterTimeout
           )
-        case .result(nil):
+        case .result(.failure(let error)):
+          throw error
+        case .result(.success(nil)):
           if allowInferenceFromRelatedFile {
             let settingsFromCopySource = await orLog("Inferring build settings from copy source") {
               try await self.fallbackBuildSettingsInferredFromCopySource(
@@ -1505,7 +1507,7 @@ package actor BuildServerManager: QueueBasedMessageHandler {
   private func buildTargets() async throws -> [BuildTargetIdentifier: BuildTargetInfo] {
     let request = WorkspaceBuildTargetsRequest()
     let result = try await cachedBuildTargets.get(request, isolation: self) { request in
-      let result = try await withTimeout(self.options.buildServerWorkspaceRequestsTimeoutOrDefault) {
+      let result = try await withTimeout(self.options.buildServerWorkspaceRequestsTimeoutOrDefault) { () -> [BuildTargetIdentifier: BuildTargetInfo] in
         guard let buildServerAdapter = try await self.buildServerAdapterAfterInitialized else {
           return [:]
         }
