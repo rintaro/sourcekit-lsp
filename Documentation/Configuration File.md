@@ -72,3 +72,4 @@ The structure of the file is currently not guaranteed to be stable. Options may 
   - This is a tagged union discriminated by the `strategy` field. Each case has the following structure:
   - `strategy: "fixedTargetBatchSize"`: Prepare a fixed number of targets in a single batch. `batchSize`: The number of targets to prepare in each batch.
     - `batchSize: integer`: The number of targets to prepare in each batch.
+- `bypassWorkspaceTrust: boolean`: Skip the workspace trust prompt and always load workspace-scoped configuration. Useful when the LSP client (e.g. VS Code) already provides its own workspace trust gating.

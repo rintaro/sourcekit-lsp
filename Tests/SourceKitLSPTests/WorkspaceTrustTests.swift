@@ -13,6 +13,8 @@
 import Foundation
 @_spi(SourceKitLSP) import LanguageServerProtocol
 @_spi(SourceKitLSP) import LanguageServerProtocolTransport
+import SKOptions
+import SKTestSupport
 import SourceKitLSP
 import SwiftExtensions
 import Synchronization
@@ -217,6 +219,39 @@ final class WorkspaceTrustTests: XCTestCase {
     let nonStandardized = workspace.appending(component: ".").appending(component: "..")
       .appending(component: workspace.lastPathComponent)
     XCTAssertTrue(trust.isTrusted(workspaceRoot: nonStandardized))
+  }
+
+  // MARK: - Bypass via SourceKitLSPOptions
+
+  func testBypassWorkspaceTrustSkipsPromptForWorkspaceWithDotBsp() async throws {
+    let workspace = try makeWorkspace()
+    try addDotBsp(to: workspace)
+
+    var options = try await SourceKitLSPOptions.testDefault()
+    options.bypassWorkspaceTrust = true
+
+    let promptCount = ThreadSafeBox<Int>(initialValue: 0)
+    let testClient = try await TestSourceKitLSPClient(
+      options: options,
+      workspaceFolders: [WorkspaceFolder(uri: DocumentURI(workspace))],
+      preInitialization: { client in
+        client.handleMultipleRequests { (_: ShowMessageRequest) -> MessageActionItem? in
+          promptCount.withLock { $0 += 1 }
+          return nil
+        }
+      }
+    )
+
+    // The trust prompt is fired in a detached `Task` during workspace creation.
+    // Give it a brief window to (incorrectly) run.
+    try await Task.sleep(for: .milliseconds(200))
+
+    XCTAssertEqual(
+      promptCount.value,
+      0,
+      "Trust prompt fired even though bypassWorkspaceTrust is true"
+    )
+    _ = testClient
   }
 }
 

@@ -32,6 +32,11 @@
       "markdownDescription" : "Number of milliseconds to wait for build settings from the build server before using fallback build settings.",
       "type" : "integer"
     },
+    "bypassWorkspaceTrust" : {
+      "description" : "Skip the workspace trust prompt and always load workspace-scoped configuration. Useful when the LSP client (e.g. VS Code) already provides its own workspace trust gating.",
+      "markdownDescription" : "Skip the workspace trust prompt and always load workspace-scoped configuration. Useful when the LSP client (e.g. VS Code) already provides its own workspace trust gating.",
+      "type" : "boolean"
+    },
     "cancelTextDocumentRequestsOnEditAndClose" : {
       "description" : "Whether sending a `textDocument/didChange` or `textDocument/didClose` notification for a document should cancel all pending requests for that document.",
       "markdownDescription" : "Whether sending a `textDocument/didChange` or `textDocument/didClose` notification for a document should cancel all pending requests for that document.",

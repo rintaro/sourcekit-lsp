@@ -824,6 +824,7 @@ extension SourceKitLSPServer {
   /// Pure check — does not prompt. To prompt the user when a workspace returns `false`,
   /// callers should pair this with `requestWorkspaceTrust(workspaceFolder:)`.
   private func isWorkspaceTrusted(workspaceFolder: DocumentURI) -> Bool {
+    if self.options.bypassWorkspaceTrustOrDefault { return true }
     guard let url = workspaceFolder.fileURL else { return true }
     let trust = WorkspaceTrust()
     if !trust.hasWorkspaceScopedConfig(workspaceRoot: url) { return true }

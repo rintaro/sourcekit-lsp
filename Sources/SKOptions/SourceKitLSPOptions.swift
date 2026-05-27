@@ -494,6 +494,14 @@ public struct SourceKitLSPOptions: Sendable, Codable, Equatable, LSPAnyCodable {
   /// If nil, defaults to preparing 1 target at a time.
   public var preparationBatchingStrategy: PreparationBatchingStrategy?
 
+  /// Skip the workspace trust prompt and always load workspace-scoped configuration.
+  /// Useful when the LSP client (e.g. VS Code) already provides its own workspace trust gating.
+  public var bypassWorkspaceTrust: Bool? = nil
+
+  public var bypassWorkspaceTrustOrDefault: Bool {
+    return bypassWorkspaceTrust ?? false
+  }
+
   public init(
     swiftPM: SwiftPMOptions? = .init(),
     fallbackBuildSystem: FallbackBuildSystemOptions? = .init(),
@@ -515,7 +523,8 @@ public struct SourceKitLSPOptions: Sendable, Codable, Equatable, LSPAnyCodable {
     workDoneProgressDebounceDuration: Double? = nil,
     sourcekitdRequestTimeout: Double? = nil,
     semanticServiceRestartTimeout: Double? = nil,
-    buildServerWorkspaceRequestsTimeout: Double? = nil
+    buildServerWorkspaceRequestsTimeout: Double? = nil,
+    bypassWorkspaceTrust: Bool? = nil
   ) {
     self.swiftPM = swiftPM
     self.fallbackBuildSystem = fallbackBuildSystem
@@ -538,6 +547,7 @@ public struct SourceKitLSPOptions: Sendable, Codable, Equatable, LSPAnyCodable {
     self.sourcekitdRequestTimeout = sourcekitdRequestTimeout
     self.semanticServiceRestartTimeout = semanticServiceRestartTimeout
     self.buildServerWorkspaceRequestsTimeout = buildServerWorkspaceRequestsTimeout
+    self.bypassWorkspaceTrust = bypassWorkspaceTrust
   }
 
   public init?(path: URL?) {
@@ -592,7 +602,8 @@ public struct SourceKitLSPOptions: Sendable, Codable, Equatable, LSPAnyCodable {
       sourcekitdRequestTimeout: override?.sourcekitdRequestTimeout ?? base.sourcekitdRequestTimeout,
       semanticServiceRestartTimeout: override?.semanticServiceRestartTimeout ?? base.semanticServiceRestartTimeout,
       buildServerWorkspaceRequestsTimeout: override?.buildServerWorkspaceRequestsTimeout
-        ?? base.buildServerWorkspaceRequestsTimeout
+        ?? base.buildServerWorkspaceRequestsTimeout,
+      bypassWorkspaceTrust: override?.bypassWorkspaceTrust ?? base.bypassWorkspaceTrust
     )
   }
 

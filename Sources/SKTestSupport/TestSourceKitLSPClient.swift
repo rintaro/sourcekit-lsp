@@ -178,6 +178,14 @@ package final class TestSourceKitLSPClient: MessageHandler, Sendable {
     if options.sourcekitdRequestTimeout == nil {
       options.sourcekitdRequestTimeout = defaultTimeout
     }
+    // Bypass workspace trust by default. Test workspaces frequently contain a `.bsp/` or
+    // `.sourcekit-lsp/` directory (e.g. via `ExternalBuildServerTestProject`), which would
+    // otherwise fire a `window/showMessageRequest` that the test client has no handler for and
+    // hang the test. Tests that want to exercise the trust prompt can opt back in by setting
+    // `bypassWorkspaceTrust = false` on the options they pass in.
+    if options.bypassWorkspaceTrust == nil {
+      options.bypassWorkspaceTrust = true
+    }
 
     self.workingDirectory = FileManager.default.currentDirectoryPath
 

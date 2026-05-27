@@ -143,6 +143,15 @@ struct SourceKitLSP: AsyncParsableCommand {
   )
   var experimentalFeatures: [String] = []
 
+  @Flag(
+    name: .customLong("bypass-workspace-trust"),
+    help: """
+      Skip the workspace trust prompt and always load workspace-scoped configuration. \
+      Use when the LSP client (e.g. VS Code) already provides its own workspace trust gating.
+      """
+  )
+  var bypassWorkspaceTrust: Bool = false
+
   /// Maps The options passed on the command line to a `SourceKitLSPOptions` struct.
   func commandLineOptions() -> SourceKitLSPOptions {
     return SourceKitLSPOptions(
@@ -171,7 +180,8 @@ struct SourceKitLSP: AsyncParsableCommand {
       ),
       defaultWorkspaceType: defaultWorkspaceType,
       generatedFilesPath: generatedFilesPath,
-      experimentalFeatures: Set(experimentalFeatures.compactMap(ExperimentalFeature.init)).nilIfEmpty
+      experimentalFeatures: Set(experimentalFeatures.compactMap(ExperimentalFeature.init)).nilIfEmpty,
+      bypassWorkspaceTrust: bypassWorkspaceTrust ? true : nil
     )
   }
 
