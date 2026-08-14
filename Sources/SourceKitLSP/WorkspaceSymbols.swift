@@ -112,8 +112,41 @@ extension SourceKitLSPServer {
         return [:]
       }
       var occurrencesByName: [String: [SymbolOccurrence]] = [:]
+      // Names that share a container resolve it once. Only valid for the life of this request, since a
+      // USR is only meaningful for `index`.
+      var containerUSRsByChain: [[String]: Set<String>] = [:]
       for name in names {
         if Task.isCancelled { return [:] }
+        if let query = QualifiedWorkspaceSymbolQuery(name) {
+          let containerUSRs: Set<String>
+          if let alreadyResolved = containerUSRsByChain[query.containerChain] {
+            containerUSRs = alreadyResolved
+          } else {
+            containerUSRs =
+              orLog("Resolving container of \(name)") {
+                try self.containerUSRs(
+                  matching: .exact(query.containerChain),
+                  includeSystemSymbols: canUseGeneratedInterfaceReferenceDocument,
+                  in: index
+                )
+              } ?? []
+            containerUSRsByChain[query.containerChain] = containerUSRs
+          }
+          occurrencesByName[name] =
+            orLog("Getting occurrences of \(name)") {
+              try self.members(
+                ofContainerUSRs: containerUSRs,
+                matching: .exact(query.member),
+                includeSystemSymbols: canUseGeneratedInterfaceReferenceDocument,
+                in: index
+              )
+              // The chain is parsed after normalizing `::` to `.`, so which separator the client used is
+              // not recoverable from it. Comparing the rebuilt name keeps a request for a C++ `Foo::bar`
+              // from also matching a Swift `Foo.bar`.
+              .filter { (try? self.qualifiedName(of: $0, in: index).qualified) == name }
+            } ?? []
+          continue
+        }
         var symbols: [SymbolOccurrence] = []
         _ = orLog("Getting symbol occurrences") {
           try index.forEachCanonicalSymbolOccurrence(byName: name) { symbolOccurrence in
