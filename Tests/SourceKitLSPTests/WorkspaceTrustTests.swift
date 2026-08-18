@@ -113,6 +113,80 @@ final class WorkspaceTrustTests: XCTestCase {
     XCTAssertTrue(trust.hasWorkspaceScopedConfig(workspaceRoot: workspace))
   }
 
+  // MARK: - workspaceScopedConfigPathIsSafe
+
+  func testConfigPathIsSafeWhenAbsent() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    XCTAssertTrue(trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: workspace))
+    XCTAssertTrue(trust.workspaceScopedConfigPathIsSafe(named: ".bsp", in: workspace))
+  }
+
+  func testConfigPathIsSafeWhenRealDirectory() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    try addDotSourceKitLSP(to: workspace)
+    try addDotBsp(to: workspace)
+    XCTAssertTrue(trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: workspace))
+    XCTAssertTrue(trust.workspaceScopedConfigPathIsSafe(named: ".bsp", in: workspace))
+  }
+
+  func testConfigPathIsUnsafeWhenRegularFile() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    try Data().write(to: workspace.appending(component: ".sourcekit-lsp"))
+    XCTAssertFalse(trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: workspace))
+  }
+
+  func testConfigPathIsSafeWhenSymlinkStaysWithinWorkspace() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    let realConfig = workspace.appending(component: "config-storage")
+    try FileManager.default.createDirectory(at: realConfig, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(
+      at: workspace.appending(component: ".sourcekit-lsp"),
+      withDestinationURL: realConfig
+    )
+    XCTAssertTrue(trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: workspace))
+  }
+
+  func testConfigPathIsUnsafeWhenSymlinkEscapesWorkspace() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    // A directory outside the workspace under the same `tempDir` parent.
+    let outside = tempDir.appending(component: "outside-config")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(
+      at: workspace.appending(component: ".sourcekit-lsp"),
+      withDestinationURL: outside
+    )
+    XCTAssertFalse(trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: workspace))
+  }
+
+  func testConfigPathIsUnsafeWhenSymlinkResolvesToFile() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    let regularFile = workspace.appending(component: "not-a-directory")
+    try Data().write(to: regularFile)
+    try FileManager.default.createSymbolicLink(
+      at: workspace.appending(component: ".bsp"),
+      withDestinationURL: regularFile
+    )
+    XCTAssertFalse(trust.workspaceScopedConfigPathIsSafe(named: ".bsp", in: workspace))
+  }
+
+  func testConfigPathIsSafeWhenDanglingSymlink() throws {
+    let trust = makeTrust()
+    let workspace = try makeWorkspace()
+    try FileManager.default.createSymbolicLink(
+      at: workspace.appending(component: ".sourcekit-lsp"),
+      withDestinationURL: workspace.appending(component: "missing-target")
+    )
+    // A dangling symlink doesn't resolve to anything, so there's nothing for the loaders to read.
+    // It's "safe" in the same sense that an absent path is safe.
+    XCTAssertTrue(trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: workspace))
+  }
+
   // MARK: - requestTrust outcomes
 
   func testGrantingFromPromptReturnsTrue() async throws {

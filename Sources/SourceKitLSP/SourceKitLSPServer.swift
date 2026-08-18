@@ -240,10 +240,8 @@ package actor SourceKitLSPServer {
       if !trusted {
         requestWorkspaceTrust(workspaceFolder: uri)
       }
-      let options =
-        trusted
-        ? SourceKitLSPOptions.merging(base: self.options, workspaceFolder: uri)
-        : self.options
+      let (options, considerWorkspaceBuildServerConfig) =
+        optionsForTrustedWorkspace(forWorkspaceFolder: uri, trusted: trusted)
 
       // Some build servers consider paths outside of the folder (eg. BSP has settings in the home directory). If we
       // allowed those paths, then the very first folder that the file is in would always be its own build server - so
@@ -253,7 +251,7 @@ package actor SourceKitLSPServer {
           forWorkspaceFolder: uri,
           onlyConsiderRoot: true,
           options: options,
-          considerWorkspaceConfig: trusted,
+          considerWorkspaceConfig: considerWorkspaceBuildServerConfig,
           hooks: hooks.buildServerHooks
         )
       else {
@@ -831,6 +829,28 @@ extension SourceKitLSPServer {
     return trust.isTrusted(workspaceRoot: url)
   }
 
+  /// Returns the merged `SourceKitLSPOptions` to use for `workspaceFolder` along with the flag
+  /// that gates `.bsp/*.json` discovery. Both honor `trusted` and the per-path safety check
+  /// (``WorkspaceTrust/workspaceScopedConfigPathIsSafe(named:in:)``), so callers should reach
+  /// for this rather than calling `SourceKitLSPOptions.merging(base:workspaceFolder:)` directly
+  /// — that would skip the symlink-escape refusal.
+  private func optionsForTrustedWorkspace(
+    forWorkspaceFolder workspaceFolder: DocumentURI,
+    trusted: Bool
+  ) -> (options: SourceKitLSPOptions, considerWorkspaceBuildServerConfig: Bool) {
+    guard trusted, let url = workspaceFolder.fileURL else {
+      return (self.options, trusted)
+    }
+    let trust = WorkspaceTrust()
+    let canLoadSourceKitLSPConfig = trust.workspaceScopedConfigPathIsSafe(named: ".sourcekit-lsp", in: url)
+    let canLoadBSPConfig = trust.workspaceScopedConfigPathIsSafe(named: ".bsp", in: url)
+    let options =
+      canLoadSourceKitLSPConfig
+      ? SourceKitLSPOptions.merging(base: self.options, workspaceFolder: workspaceFolder)
+      : self.options
+    return (options, canLoadBSPConfig)
+  }
+
   /// Fires off a background task that asks the user whether to trust `workspaceFolder` and,
   /// on grant, reloads the workspace in trusted mode and reattaches open documents.
   ///
@@ -883,15 +903,13 @@ extension SourceKitLSPServer {
     if !trusted {
       requestWorkspaceTrust(workspaceFolder: workspaceFolder)
     }
-    let options =
-      trusted
-      ? SourceKitLSPOptions.merging(base: self.options, workspaceFolder: workspaceFolder)
-      : self.options
+    let (options, considerWorkspaceBuildServerConfig) =
+      optionsForTrustedWorkspace(forWorkspaceFolder: workspaceFolder, trusted: trusted)
     let buildServerSpec = determineBuildServer(
       forWorkspaceFolder: workspaceFolder,
       onlyConsiderRoot: false,
       options: options,
-      considerWorkspaceConfig: trusted,
+      considerWorkspaceConfig: considerWorkspaceBuildServerConfig,
       hooks: hooks.buildServerHooks
     )
     return try await self.createWorkspace(
